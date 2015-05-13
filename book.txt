@@ -1,0 +1,2 @@
+1.a.jpg 0 out.png
+2.frame10.png frame11.png 0 out.png
