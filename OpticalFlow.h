@@ -56,7 +56,7 @@ private:
 
 	int m_NumStep;
 	float m_lamda;
-	float m_theta;
+	//float m_theta;
 	float m_tau;
 	float m_sigma;
 	float m_criteria;

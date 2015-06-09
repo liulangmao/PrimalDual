@@ -1,6 +1,6 @@
 #include "OpticalFlow.h"
 #define IterationMax 50 
-#define WrapIteration 2
+#define WrapIteration 1
 OpticalFlow::OpticalFlow(cv::Mat & I1, cv::Mat &I2, Method m_method)
 {
 	m_Height = I1.rows;
@@ -38,9 +38,9 @@ OpticalFlow::OpticalFlow(cv::Mat & I1, cv::Mat &I2, Method m_method)
 
 
 
-	m_lamda = 1;
+	m_lamda = 40;
 	m_tau = 1 / std::sqrt(8);
-	m_theta = 1 / std::sqrt(8);
+	//m_theta = 1 / std::sqrt(8);
 	currentLevel = 0;
 }
 
@@ -62,7 +62,9 @@ void OpticalFlow::MakeNabla()
 				printf("boundary error!");
 				}*/
 				coefficients.push_back(Triplet(count, count, -1));
+				//cout << "("<<count+1 << "," << count+1 << ") =" << "-1\n";
 				coefficients.push_back(Triplet(count, count + 1, 1));
+				//cout << "(" << count+1 << "," << count + 2 << ") =" << "1\n";
 			}
 			if (r < currentHeight - 1)
 			{
@@ -71,7 +73,9 @@ void OpticalFlow::MakeNabla()
 				printf("boundary error!");
 				}*/
 				coefficients.push_back(Triplet(count + m_N, count, -1));
+				//cout << "(" << count + m_N+1 << "," << count+1 << ") =" << "-1\n";
 				coefficients.push_back(Triplet(count + m_N, count + currentWidth, 1));
+				//cout << "(" << count + m_N+1 << "," << count + currentWidth+1 << ") =" << "1\n";
 			}
 		}
 	}
@@ -240,7 +244,8 @@ void OpticalFlow::CoarseToFine(int & level, float factor)
 		{
 			Illum1_last = Illum1_current;
 			Illum2_last = Illum2_current;
-
+			DebugePrintMat(currentWidth, y_current);
+			DebugePrintMat(currentWidth, x_current);
 			//cv::Mat x_last_temp, y_last_temp;
 			x_current.copyTo(x_last);
 			y_current.copyTo(y_last);
@@ -287,7 +292,7 @@ void OpticalFlow::CoarseToFine(int & level, float factor)
 			x_current = x_current / rescaleWidth;
 			y_current = y_current / rescaleHeigh;
 			
-			//DebugePrintMat(currentWidth, y_current);
+			DebugePrintMat(currentWidth, y_current);
 		}
 		m_N = WidthPryamid[currentLevel] * HeightPryamid[currentLevel];
 		currentWidth = WidthPryamid[currentLevel];
@@ -373,8 +378,44 @@ void OpticalFlow::ComputeTv_l1_motion_primal_dual()
 		{
 			//First to update p
 			m_valuePX = m_valuePX + m_sigma*m_nabla*m_valueX_temp;
+			//float y0_0 = 0.0;
+			//SpMat::InnerIterator it330_0(m_nabla, 330);
+			//y0_0 = it330_0.value(); //(330,0)
+			//SpMat::InnerIterator it0_0(m_nabla, 0); 
+			//y0_0 = it0_0.value(); it0_0++;//(0,0)
+			//y0_0 = it0_0.value();//(0,1)
+			//SpMat::InnerIterator it0_1(m_nabla, 330); it0_1++;
+			//y0_0 = it0_1.value();
+			//SpMat::InnerIterator it1_1(m_nabla, 1);
+			//y0_0 = it1_1.value();
+			//SpMat::InnerIterator it636_1(m_nabla, 636);
+			//int index = 0;
+			//do
+			//{
+			//	it636_1++;
+			//	index++;
+			//} while (index == 306);
+			//y0_0 = it636_1.value();
+			//SpMat::InnerIterator it308_1(m_nabla, 308);
+			//index = 0;
+			//do
+			//{
+			//	it308_1++;
+			//	index++;
+			//} while (index == 308);
+			//y0_0 = it308_1.value();
+			/*for (int k = 0; k < m_nabla.outerSize(); ++k)
+			{
+				for (SpMat::InnerIterator it(m_nabla, k); it; ++it)
+				{
+					it.value();
+				}
+			}*/
+				
+			DebugePrintMatrix(currentWidth, m_valueX_temp);
 			//DebugePrintMatrix(currentWidth, m_valuePX);
 			m_valuePY = m_valuePY + m_sigma*m_nabla*m_valueY_temp;
+			DebugePrintMatrix(currentWidth, m_valuePX);
 			// Steps1 on page4 in paper<A first-order primal-dual algorithm for convex problems> Algorithm.
 			for (int n = 0; n < m_N; n++)
 			{
@@ -390,36 +431,38 @@ void OpticalFlow::ComputeTv_l1_motion_primal_dual()
 				m_valuePY(n, 0) = m_valuePY(n + m_N, 0) / temp;
 				m_valuePY(n + m_N, 0) = m_valuePY(n + m_N, 0) / temp;
 			}
+			
 			//Second to update U (which is what we want) using P
 			// Part steps2 on page4 in paper<A first-order primal-dual algorithm for convex problems> Algorithm.
 			m_divop = m_nabla.transpose();
 			m_gradientFlowUX = m_gradientFlowUX - m_tau*m_divop*m_valuePX;
 			m_gradientFlowUY = m_gradientFlowUY - m_tau*m_divop*m_valuePY;
+			DebugePrintMatrix(currentWidth, m_gradientFlowUX);
 			//Steps3 Another part has been changed following the equation 11 on page5  Or equation 16 on page 6 in paper<An Improved Algorithm for TV-L1 Optical Flow>.
 			//Construct pho and update the U using pho
 			Eigen::MatrixXf pho = Eigen::MatrixXf::Zero(m_N, 1);
-			//DebugePrintMatrix(currentWidth, m_WrapX);
 			//DebugePrintMatrix(currentWidth, m_WrapY);
 			//DebugePrintMatrix(currentWidth, WrapNextframe2);
 			//DebugePrintMatrix(currentWidth, m_gradientFlowUY);
 			//DebugePrintMatrix(currentWidth, m_gradientFlowUY0);
 			pho = (m_gradientFlowUX - m_gradientFlowUX0).cwiseProduct(m_WrapX) + (m_gradientFlowUY - m_gradientFlowUY0).cwiseProduct(m_WrapY) + WrapNextframe2;
+
 			//DebugePrintMatrix(currentWidth, pho);
 			int case1 = 0, case2 = 0, case3 = 0, case4 = 0;
 			for (int n = 0; n < m_N; n++)
 			{
-				float I1_Nabla = std::max(m_WrapX(n, 0)*m_WrapX(n, 0) + m_WrapY(n, 0)*m_WrapY(n, 0), (float)1e-09);
+				float I1_Nabla = std::max(m_WrapX(n, 0)*m_WrapX(n, 0) + m_WrapY(n, 0)*m_WrapY(n, 0) + (float)0.000100, (float)1e-09);
 
-				if (pho(n, 0) < -m_lamda*m_theta*I1_Nabla)
+				if (pho(n, 0) < -m_lamda*m_tau*I1_Nabla)
 				{
-					m_gradientFlowUX(n, 0) = m_gradientFlowUX(n, 0) + m_lamda*m_theta*m_WrapX(n, 0);
-					m_gradientFlowUY(n, 0) = m_gradientFlowUY(n, 0) + m_lamda*m_theta*m_WrapY(n, 0);
+					m_gradientFlowUX(n, 0) = m_gradientFlowUX(n, 0) + m_lamda*m_tau*m_WrapX(n, 0);
+					m_gradientFlowUY(n, 0) = m_gradientFlowUY(n, 0) + m_lamda*m_tau*m_WrapY(n, 0);
 					case1++;
 				}
-				else if (pho(n, 0) > m_lamda*m_theta*I1_Nabla)
+				else if (pho(n, 0) > m_lamda*m_tau*I1_Nabla)
 				{
-					m_gradientFlowUX(n, 0) = m_gradientFlowUX(n, 0) - m_lamda*m_theta*m_WrapX(n, 0);
-					m_gradientFlowUY(n, 0) = m_gradientFlowUY(n, 0) - m_lamda*m_theta*m_WrapY(n, 0);
+					m_gradientFlowUX(n, 0) = m_gradientFlowUX(n, 0) - m_lamda*m_tau*m_WrapX(n, 0);
+					m_gradientFlowUY(n, 0) = m_gradientFlowUY(n, 0) - m_lamda*m_tau*m_WrapY(n, 0);
 					case2++;
 				}
 				else
@@ -428,16 +471,25 @@ void OpticalFlow::ComputeTv_l1_motion_primal_dual()
 					m_gradientFlowUY(n, 0) = m_gradientFlowUY(n, 0) - pho(n, 0)*m_WrapY(n, 0) / I1_Nabla;
 					case3++;
 				}
-				if (pho(n, 0) == 0)
-				{
-					case4++;
-				}
 			}
+
+			float pho284_0 = pho(284, 0); float pho284_0_t = m_WrapX(284, 0)*m_WrapX(284, 0) + m_WrapY(284, 0)*m_WrapY(284, 0); float tt284_0 = m_lamda*m_tau*pho284_0_t;
+			float pho305_0 = pho(305, 0); float pho305_0_t = m_WrapX(305, 0)*m_WrapX(305, 0) + m_WrapY(305, 0)*m_WrapY(305, 0); float tt305_0 = m_lamda*m_tau*pho305_0_t;
+			float pho306_0 = pho(306, 0); float pho306_0_t = m_WrapX(306, 0)*m_WrapX(306, 0) + m_WrapY(306, 0)*m_WrapY(306, 0); float tt306_0 = m_lamda*m_tau*pho306_0_t;
+			cout << m_WrapX(284, 0) << endl;
+			cout << m_WrapY(284, 0) << endl;
+			cout << m_WrapX(284, 0)*m_WrapX(284, 0) << endl; 
+			cout << m_WrapY(284, 0)*m_WrapY(284, 0) << endl;
+			cout << tt284_0 << endl;
+
 			//DebugePrintMatrix(currentWidth, m_gradientFlowUX);
 			//Steps 4 Update tempU for next iteration
 			m_valueX_temp = 2 * m_gradientFlowUX - m_valueX_temp;
 			m_valueY_temp = 2 * m_gradientFlowUY - m_valueY_temp;
-			//DebugePrintMatrix(currentWidth, m_valueX_temp);
+			DebugePrintMatrix(currentWidth, m_valueX_temp);
+			cout << case1 << endl;
+			cout << case2 << endl;
+			cout << case3 << endl;
 			//
 #ifdef Debuge
 			if (iter % 10 == 0)
@@ -452,18 +504,18 @@ void OpticalFlow::ComputeTv_l1_motion_primal_dual()
 				printf("The x gradient is %.3f \n", y1(0, 0));
 				printf("The y gradient is %.3f \n", y2(0, 0));
 
-				float temp = y1(0, 0) + y2(0, 0);
+				/*float temp = y1(0, 0) + y2(0, 0);
 
 				float firstpart = std::sqrt(temp);
-				printf("The first part engery is %.3f\n", firstpart);
+				printf("The first part engery is %.3f\n", firstpart);*/
 
 				y1 = pho.transpose()*pho;
 				float y = y1(0, 0);
 				float secondpart = m_lamda*y1(0, 0);
-				Engery(iter, 0) = firstpart + secondpart;
+				//Engery(iter, 0) = firstpart + secondpart;
 
 				printf("The second part engery is %.3f\n ", y);
-				printf("The engery is %.3f\n ", Engery(iter, 0));
+				//printf("The engery is %.3f\n ", Engery(iter, 0));
 
 				ShowFlow(m_gradientFlowUX, m_gradientFlowUY, iter, i);
 				Eigen::MatrixXf m_WrapX = Eigen::MatrixXf::Zero(m_N, 1);
@@ -489,18 +541,20 @@ void OpticalFlow::ComputeTv_l1_motion_primal_dual()
 #endif
 		}//end of iteration
 		
-		Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic> stride(1, currentWidth);
+		/*Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic> stride(1, currentWidth);
 		Eigen::MatrixXf a = Eigen::MatrixXf::Map(m_gradientFlowUX.data(), currentHeight, currentWidth, stride);
 		cv::eigen2cv(a, x_current);
 
 		Eigen::MatrixXf b= Eigen::MatrixXf::Map(m_gradientFlowUY.data(), currentHeight, currentWidth, stride);
-		cv::eigen2cv(b, y_current);
+		cv::eigen2cv(b, y_current);*/
 		index = 0;
 		for (int r = 0; r < currentHeight; r++)
 		{
 			for (int c = 0; c < currentWidth; c++)
 			{
 				index = c + r*currentWidth;
+				x_current.at<float>(r, c) = m_gradientFlowUX(index, 0);
+				y_current.at<float>(r, c) = m_gradientFlowUY(index, 0);
 				px_u_current.at<float>(r, c) = m_valuePX(index, 0);
 				py_u_current.at<float>(r, c) = m_valuePY(index, 0);
 				px_v_current.at<float>(r, c) = m_valuePX(index + m_N, 0);
@@ -724,7 +778,7 @@ void OpticalFlow::Wrapping(Eigen::MatrixXf& m_gradientFlowUX, Eigen::MatrixXf& m
 	}
 
 	/*Debug: */
-	/*ifstream in_stream;
+	ifstream in_stream;
 	in_stream.open("I1.txt");
 	string line;
 	int  ccol = 0;
@@ -762,7 +816,7 @@ void OpticalFlow::Wrapping(Eigen::MatrixXf& m_gradientFlowUX, Eigen::MatrixXf& m
 			line.clear();
 		}
 		in_stream2.close();
-	}*/
+	}
 	
 	//DebugePrintMat(currentWidth, Illum1_current);
 	
